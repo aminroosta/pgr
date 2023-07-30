@@ -1,15 +1,13 @@
 # pgr: postgres relief
 
-pgr is a project that allows you to run SQL scripts as database endpoints using
-a fast language and a config file. It supports both REST and WebSocket
-protocols and JSON output.
+pgr is a project that allows you to run SQL scripts as REST and WebSocket
+endpoints.
 
 ## Features
 
 - You can define SQL functions that map to REST endpoints using a simple naming convention.
 - You can use path variables, query string parameters, and request body as function arguments.
-- You can use return values, out parameters, and headers to customize the response body, status, and headers.
-- You can use hook functions to handle common tasks such as parsing or setting cookies, JWT authentication, WebSocket events, etc.
+- You can use hook functions to handle common tasks such as parsing or setting cookies, JWT authentication, WebSocket sessions, etc.
 - You can use a config file to specify the database connection details, the JWT secret, and other options.
 
 ## Usage
