@@ -3,6 +3,12 @@
 pgr is a project that allows you to run SQL scripts as REST and WebSocket
 endpoints.
 
+## Disclaimer
+
+This project is not implemented yet. It is a hypothetical idea for using
+PostgreSQL as a web backend. The examples and documentation are not real. Use
+at your own risk.
+
 ## Features
 
 - You can define SQL functions that map to REST endpoints using a simple naming convention.
