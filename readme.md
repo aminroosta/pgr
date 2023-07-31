@@ -73,10 +73,6 @@ curl -X PUT http://localhost:8080/user/2 -d '{"name":"Bob"}' # update the name o
 curl -X DELETE http://localhost:8080/user/2 # delete the user with id 2
 ```
 
-Here are two possible sections for your readme file:
-
-Here is a possible section for your readme file:
-
 ## Query string parameters
 
 You can use query string parameters to pass additional arguments to your
@@ -130,20 +126,56 @@ create function "post /user"(body user_t, out cookie text) returns user_t as $$
   cookie := 'user_id=' || body.user_id;
 $$ language sql;
 ```
-Here is a possible part for your readme file:
-
 ## Built-in hooks
 
 pgr provides some built-in hooks that you can use in your endpoint functions or WebSocket handlers. These hooks are:
 
+- `config`: the config file as a JSON object. You can use this hook to access
+  the configuration options in your endpoint functions or WebSocket handlers.
+```sql
+-- create a function that returns the database name from the config file
+create function "get /dbname"(config jsonb) returns text as $$
+  -- return the dbname value
+  return config->'database'->>'dbname';
+$$ language sql;
+```
 - `headers`: an array of key-value pairs that represents the HTTP headers of
   the request or the response. You can use this hook as an `in` or `out`
   argument to get or set the headers.
+
 - `status`: an integer that represents the HTTP status code of the response.
   You can use this hook as an `out` argument to set the status code explicitly.
+
 - `session`: a JSON object that represents the WebSocket session data. You can
-  use this hook as an `inout` argument to get or set the session data. This
-  hook is only available for WebSocket handlers.
+  use this hook to store or retrieve any information related to the WebSocket
+  connection, such as user id, preferences, state, etc.
+
+```sql
+create function "ws /on/connected"(headers text[][], out session jsonb, out response jsonb) as $$
+  -- get the user id from the headers
+  declare user_id text := (select value from unnest(headers) where key = 'X-User-Id');
+  -- set the session user id
+  session := jsonb_build_object('user_id', user_id);
+  -- send a welcome message
+  response := jsonb_build_object('type', 'welcome', 'user_id', user_id);
+$$ language sql;
+```
+
+The session hook is only available for WebSocket handlers, because it is tied
+to the WebSocket connection. Unlike REST endpoints, which are stateless and
+handle each request independently, WebSocket handlers are stateful and maintain
+a persistent connection with the client.
+
+```sql
+create function "ws /on/type=chat"(body jsonb, session jsonb) returns jsonb as $$
+  -- get the user id from the session
+  declare user_id text := session->>'user_id';
+  -- get the message from the body
+  declare message text := body->>'message';
+  -- return a chat message with the user id and message
+  return jsonb_build_object('type', 'chat', 'user_id', user_id, 'message', message);
+$$ language sql;
+```
 
 ## WebSocket handlers
 
@@ -200,8 +232,7 @@ create function "post /user"(body user_t) returns user_t as $$
   insert into users values (body.*) returning *;
   notify '/on/connected', jsonb_build_object('type', 'new_user', 'user', body.*)::text; -- send a message to the /on/connected channel
 $$ language sql;
-
-Here is a revised section for your readme file:
+```
 
 ## SQL files
 
@@ -239,3 +270,4 @@ create function "get /user/:id"(id integer) returns public.users as $$
   select * from public.users where user_id = id; -- need to use public.users here
 $$ language sql;
 ```
+
