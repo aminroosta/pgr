@@ -93,7 +93,7 @@ You can then send requests to the endpoint with query string parameters. For exa
 curl http://localhost:8080/user?id=1&name=Alice # get the user with id 1 and name Alice
 ```
 
-## Hooks and cookies
+## Hooks
 
 Hooks are special functions that can be used to handle common tasks such as
 parsing or setting cookies, JWT authentication, WebSocket events, etc. You can
