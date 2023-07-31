@@ -1,0 +1,15 @@
+version: '3.1'
+
+services:
+  db:
+    container_name: postgres
+    image: postgres
+    restart: always
+    environment:
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./:/home/
+
+# PGPASSWORD=postgres psql -h 192.168.2.10 -U postgres
