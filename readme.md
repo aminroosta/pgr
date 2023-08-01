@@ -45,6 +45,12 @@ create type user_t AS (
   name text
 );
 
+-- get all users
+create function "get /users"() returns setof user_t as $$
+  select * from users;
+$$ language sql;
+
+
 -- get a user by id
 create function "get /user/:id"(id integer) returns user_t as $$
   select * from users where user_id = id;
