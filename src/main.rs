@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 mod test_helpers;
 use anyhow::Result;
 use serde::Deserialize;
@@ -8,48 +9,36 @@ async fn main() -> Result<(), Error> {
     Ok(())
 }
 
-async fn start(client: &mut Client, sql: &str) -> Result<()> {
+async fn reload(client: &mut Client, sql: &str) -> Result<()> {
     let pgr_sql = include_str!("pgr.sql");
     let pgr_sql = pgr_sql.replace("PLACEHOLDER", sql);
     client.batch_execute(&pgr_sql).await?;
     Ok(())
 }
 
-#[tokio::test]
-async fn test_add() -> Result<()> {
-    let sql = include_str!("../test/sql/user.sql");
-    let mut client = test_helpers::connect().await;
-    start(&mut client, sql).await?;
-
-    let procs = get_pg_procs(&mut client).await?;
-    dbg!(&procs);
-
-    Ok(())
-}
-
 #[derive(Deserialize, Debug)]
-struct PgArg {
+pub struct PgArg {
     name: String,
     mode: String,
     ty: String,
 }
 
 #[derive(Deserialize, Debug)]
-struct PgProc {
+struct PgFunc {
     name: String,
     retset: bool,
     rettype: String,
     args: Vec<PgArg>,
 }
 
-async fn get_pg_procs(client: &mut Client) -> Result<Vec<PgProc>> {
+async fn get_pg_functions(client: &mut Client) -> Result<Vec<PgFunc>> {
     let rows = client
-        .query("select * from pgr._pgr_procs('pgr')", &[])
+        .query("select * from pgr._pgr_functions('pgr')", &[])
         .await?;
 
     let mut procs = Vec::new();
     for row in rows {
-        let mut proc = PgProc {
+        let mut proc = PgFunc {
             name: row.get("name"),
             retset: row.get("retset"),
             rettype: row.get("rettype"),
@@ -76,6 +65,17 @@ async fn get_pg_procs(client: &mut Client) -> Result<Vec<PgProc>> {
         procs.push(proc);
     }
 
-
     Ok(procs)
+}
+
+#[tokio::test]
+async fn test_get_pg_functions() -> Result<()> {
+    let sql = include_str!("../test/sql/user.sql");
+    let mut client = test_helpers::connect().await;
+    reload(&mut client, sql).await?;
+
+    let functions = get_pg_functions(&mut client).await?;
+    dbg!(&functions);
+
+    Ok(())
 }

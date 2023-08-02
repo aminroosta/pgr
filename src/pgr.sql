@@ -14,7 +14,7 @@ create function _pgr_to_text_oid(oid oid) returns text as $$
   where pg_type.oid = $1;
 $$ language sql;
 
-create function _pgr_procs(schema_name text)
+create function _pgr_functions(schema_name text)
 returns table (
   name text,
   retset boolean,
