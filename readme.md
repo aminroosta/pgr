@@ -133,10 +133,12 @@ create function "get /user/:id"(id integer, cookie text) returns user_t as $$
 $$ language sql;
 
 -- create a new user and set a cookie
-create function "post /user"(body user_t, out cookie text) returns user_t as $$
-  insert into users values (body.*) returning *;
+create function "post /user"(body user_t, out cookie text, out response record) as $$
+begin
+  insert into users values (body.*) returning user_id, name into response.user_id, response.name;
   cookie := 'user_id=' || body.user_id;
-$$ language sql;
+end
+$$ language plpgsql;
 ```
 
 ## Built-in hooks

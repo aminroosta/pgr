@@ -12,21 +12,35 @@ pub struct PgArg {
 #[derive(Deserialize, Debug)]
 pub struct PgFunc {
     pub name: String,
+    pub method: String,
+    pub path: Vec<String>,
+    pub query: Vec<String>,
     pub retset: bool,
     pub rettype: String,
     pub args: Vec<PgArg>,
 }
 
 impl PgFunc {
-    async fn from_db(client: &mut Client) -> Result<Vec<PgFunc>> {
+    pub async fn from_db(client: &mut Client) -> Result<Vec<PgFunc>> {
         let rows = client
             .query("select * from pgr._pgr_functions('pgr')", &[])
             .await?;
 
         let mut funcs = Vec::new();
         for row in rows {
+            let name: String = row.get("name");
+            let (method, path, query) = match Self::parse_name(&name) {
+                Ok((method, path, query)) => (method, path, query),
+                Err(e) => {
+                    println!("{:?}", e);
+                    continue;
+                }
+            };
             let mut func = PgFunc {
                 name: row.get("name"),
+                method: method,
+                path: path,
+                query: query,
                 retset: row.get("retset"),
                 rettype: row.get("rettype"),
                 args: vec![],
@@ -53,19 +67,19 @@ impl PgFunc {
         }
         Ok(funcs)
     }
-    pub fn parse_name(name: &str) -> Result<(&str, Vec<&str>, Vec<&str>)> {
+    fn parse_name(name: &str) -> Result<(String, Vec<String>, Vec<String>)> {
         if let Some((method, url)) = name.split_once(' ') {
-            let method = method.trim();
-            println!("method: {}, url: {}", method, url);
+            let method = method.trim().to_string();
             match url.trim().split('?').collect::<Vec<_>>().as_slice() {
                 [path, query] => {
-                    println!("path: {}, query: {}", path, query);
-                    let query = query.split('&').collect::<Vec<_>>();
+                    let query = query.split('&').map(|q| q.to_string()).collect();
                     let path = Self::parse_path(path);
+                    // dbg!((&method, &path, &query));
                     return Ok((method, path, query));
                 }
                 [path] => {
                     let path = Self::parse_path(path);
+                    // dbg!((&method, &path));
                     return Ok((method, path, vec![]));
                 }
                 _ => return Err(anyhow!("Invalid function name: {}", name)),
@@ -73,11 +87,12 @@ impl PgFunc {
         }
         Err(anyhow!("Invalid function name: {}", name))
     }
-    fn parse_path(path: &str) -> Vec<&str> {
+    fn parse_path(path: &str) -> Vec<String> {
         path.trim_matches(' ')
             .trim_matches('/')
             .split('/')
-            .collect::<Vec<_>>()
+            .map(|s| s.to_string())
+            .collect()
     }
 }
 
@@ -88,7 +103,7 @@ async fn test_from_db() -> Result<()> {
     crate::db_client::reload(&mut client, sql).await?;
 
     let functions = PgFunc::from_db(&mut client).await?;
-    assert_eq!(functions.len(), 6);
+    assert_eq!(functions.len(), 8);
 
     Ok(())
 }
@@ -96,6 +111,13 @@ async fn test_from_db() -> Result<()> {
 #[tokio::test]
 async fn test_parse_name() -> Result<()> {
     let result = PgFunc::parse_name("GET /user/:id?name&age")?;
-    assert_eq!(result, ("GET", vec!["user", ":id"], vec!["name", "age"]));
+    assert_eq!(
+        result,
+        (
+            "GET".to_owned(),
+            vec!["user".to_owned(), ":id".to_owned()],
+            vec!["name".to_owned(), "age".to_owned()]
+        )
+    );
     Ok(())
 }

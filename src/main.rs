@@ -1,39 +1,19 @@
 #![allow(dead_code)]
 mod db_client;
 mod pg_func;
+mod route;
 
 use anyhow::Result;
-use pg_func::{PgArg, PgFunc};
+use pg_func::PgFunc;
 use tokio_postgres::Client;
 use warp::{http::HeaderMap, Filter};
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let pg_func = PgFunc {
-        name: "get /user/:id?name&age".to_string(),
-        retset: false,
-        rettype: "pgr.user_t".to_string(),
-        args: vec![
-            PgArg {
-                name: "id".to_string(),
-                mode: "in".to_string(),
-                ty: "int4".to_string(),
-            },
-            PgArg {
-                name: "name".to_string(),
-                mode: "in".to_string(),
-                ty: "text".to_string(),
-            },
-            PgArg {
-                name: "age".to_string(),
-                mode: "in".to_string(),
-                ty: "int4".to_string(),
-            },
-        ],
-    };
-
     let mut client = db_client::connect().await?;
-    handle_pg_func(&mut client, &pg_func).await?;
+    let pg_funcs = PgFunc::from_db(&mut db_client::connect().await?).await?;
+
+    handle_pg_func(&mut client, &pg_funcs[0]).await?;
 
     // get /user?id&name
     let hello = warp::path!("hello" / String)
@@ -45,7 +25,7 @@ async fn main() -> Result<()> {
                 .map(|(k, v)| vec![k.as_str(), v.to_str().unwrap()])
                 .flatten()
                 .collect::<Vec<_>>();
-            dbg!(&headers_vec);
+            // dbg!(&headers_vec);
             format!("Hello, {}\n{:?}!", name, headers)
         });
 
