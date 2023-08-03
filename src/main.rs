@@ -1,81 +1,79 @@
 #![allow(dead_code)]
-mod test_helpers;
+mod db_client;
+mod pg_func;
+
 use anyhow::Result;
-use serde::Deserialize;
-use tokio_postgres::{Client, Error};
+use pg_func::{PgArg, PgFunc};
+use tokio_postgres::Client;
+use warp::{http::HeaderMap, Filter};
 
 #[tokio::main]
-async fn main() -> Result<(), Error> {
-    Ok(())
-}
+async fn main() -> Result<()> {
+    let pg_func = PgFunc {
+        name: "get /user/:id?name&age".to_string(),
+        retset: false,
+        rettype: "pgr.user_t".to_string(),
+        args: vec![
+            PgArg {
+                name: "id".to_string(),
+                mode: "in".to_string(),
+                ty: "int4".to_string(),
+            },
+            PgArg {
+                name: "name".to_string(),
+                mode: "in".to_string(),
+                ty: "text".to_string(),
+            },
+            PgArg {
+                name: "age".to_string(),
+                mode: "in".to_string(),
+                ty: "int4".to_string(),
+            },
+        ],
+    };
 
-async fn reload(client: &mut Client, sql: &str) -> Result<()> {
-    let pgr_sql = include_str!("pgr.sql");
-    let pgr_sql = pgr_sql.replace("PLACEHOLDER", sql);
-    client.batch_execute(&pgr_sql).await?;
-    Ok(())
-}
+    let mut client = db_client::connect().await?;
+    handle_pg_func(&mut client, &pg_func).await?;
 
-#[derive(Deserialize, Debug)]
-pub struct PgArg {
-    name: String,
-    mode: String,
-    ty: String,
-}
-
-#[derive(Deserialize, Debug)]
-struct PgFunc {
-    name: String,
-    retset: bool,
-    rettype: String,
-    args: Vec<PgArg>,
-}
-
-async fn get_pg_functions(client: &mut Client) -> Result<Vec<PgFunc>> {
-    let rows = client
-        .query("select * from pgr._pgr_functions('pgr')", &[])
-        .await?;
-
-    let mut procs = Vec::new();
-    for row in rows {
-        let mut proc = PgFunc {
-            name: row.get("name"),
-            retset: row.get("retset"),
-            rettype: row.get("rettype"),
-            args: vec![],
-        };
-
-        let argtypes: Vec<String> = row.get("argtypes");
-        let argmodes: Vec<String> = row.get("argmodes");
-        let argnames: Vec<String> = row.get("argnames");
-
-        (0..argtypes.len()).for_each(|i| {
-            let arg = PgArg {
-                name: argnames[i as usize].clone(),
-                mode: match argmodes.len() {
-                    0 => "in".to_string(),
-                    _ => argmodes[i as usize].clone(),
-                }
-                .to_string(),
-                ty: argtypes[i as usize].clone(),
-            };
-            proc.args.push(arg);
+    // get /user?id&name
+    let hello = warp::path!("hello" / String)
+        .and(warp::header::headers_cloned())
+        // GET /hello/warp => 200 OK with body "Hello, warp!"
+        .map(|name: String, headers: HeaderMap| {
+            let headers_vec = headers
+                .iter()
+                .map(|(k, v)| vec![k.as_str(), v.to_str().unwrap()])
+                .flatten()
+                .collect::<Vec<_>>();
+            dbg!(&headers_vec);
+            format!("Hello, {}\n{:?}!", name, headers)
         });
 
-        procs.push(proc);
-    }
-
-    Ok(procs)
+    warp::serve(hello).run(([127, 0, 0, 1], 3030)).await;
+    Ok(())
 }
 
-#[tokio::test]
-async fn test_get_pg_functions() -> Result<()> {
-    let sql = include_str!("../test/sql/user.sql");
-    let mut client = test_helpers::connect().await;
-    reload(&mut client, sql).await?;
+async fn handle_pg_func(_client: &mut Client, func: &PgFunc) -> Result<()> {
+    let name = func.name.split_whitespace().collect::<Vec<_>>();
+    if !name.len() == 2 {
+        println!("Invalid function name: {}", func.name);
+        return Ok(());
+    }
+    let verb = name[0];
+    if !["get", "put", "post", "patch", "delete"].contains(&verb) {
+        println!("invalid function name: {}", func.name);
+        return Ok(());
+    }
+    let url = name[1].split("?").collect::<Vec<_>>();
+    if !url.len() <= 2 {
+        println!("Invalid function name: {}", func.name);
+        return Ok(());
+    }
+    let path = url[0];
+    let query = if url.len() == 2 { url[1] } else { "" };
 
-    let functions = get_pg_functions(&mut client).await?;
-    dbg!(&functions);
+    dbg!(&verb, &path, &query);
+    dbg!(&func.args);
 
     Ok(())
 }

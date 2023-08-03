@@ -20,7 +20,11 @@ create function "delete /user/:id"(id integer) returns void as $$
 $$ language sql;
 
 -- get a user by id and name
-create function "get /user?id&name"(id integer, name text) returns user_t as $$
+create function "get /user/:id?name&age"(
+  id integer,
+  name text,
+  age integer
+) returns user_t as $$
   select * from users where user_id = id and name = name;
 $$ language sql;
 
