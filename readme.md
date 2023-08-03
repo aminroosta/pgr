@@ -138,12 +138,14 @@ create function "post /user"(body user_t, out cookie text) returns user_t as $$
   cookie := 'user_id=' || body.user_id;
 $$ language sql;
 ```
+
 ## Built-in hooks
 
 pgr provides some built-in hooks that you can use in your endpoint functions or WebSocket handlers. These hooks are:
 
 - `config`: the config file as a JSON object. You can use this hook to access
   the configuration options in your endpoint functions or WebSocket handlers.
+
 ```sql
 -- create a function that returns the database name from the config file
 create function "get /dbname"(config jsonb) returns text as $$
@@ -151,6 +153,7 @@ create function "get /dbname"(config jsonb) returns text as $$
   return config->'database'->>'dbname';
 $$ language sql;
 ```
+
 - `headers`: an array of key-value pairs that represents the HTTP headers of
   the request or the response. You can use this hook as an `in` or `out`
   argument to get or set the headers.
@@ -163,7 +166,7 @@ $$ language sql;
   connection, such as user id, preferences, state, etc.
 
 ```sql
-create function "ws /on/connected"(headers text[][], out session jsonb, out response jsonb) as $$
+create function "ws /connected"(headers text[][], out session jsonb, out response jsonb) as $$
   -- get the user id from the headers
   declare user_id text := (select value from unnest(headers) where key = 'X-User-Id');
   -- set the session user id
@@ -179,7 +182,7 @@ handle each request independently, WebSocket handlers are stateful and maintain
 a persistent connection with the client.
 
 ```sql
-create function "ws /on/type=chat"(body jsonb, session jsonb) returns jsonb as $$
+create function "ws /message?type=chat"(body jsonb, session jsonb) returns jsonb as $$
   -- get the user id from the session
   declare user_id text := session->>'user_id';
   -- get the message from the body
@@ -198,28 +201,29 @@ For example:
 
 ```sql
 -- handle WebSocket connection
-create function "ws /on/connected"(headers text[][], out session jsonb, out response jsonb) as $$
+create function "ws /connected"(headers text[][], out session jsonb, out response jsonb) as $$
   session := jsonb_build_object('user_id', null);
   response := jsonb_build_object('type', 'welcome');
 $$ language sql;
 
 -- handle WebSocket disconnection
-create function "ws /on/disconnected"(session jsonb) returns void as $$
+create function "ws /disconnected"(session jsonb) returns void as $$
   -- do some cleanup
 $$ language sql;
 
 -- handle WebSocket message with type auth
-create function "ws /on/type=auth"(body jsonb, inout session jsonb, out response jsonb) as $$
+create function "ws /message?type=auth"(body jsonb, inout session jsonb, out response jsonb) as $$
   -- validate the body and set the session user_id
   session := session || body;
   response := jsonb_build_object('type', 'auth', 'status', 'ok');
 $$ language sql;
 
 -- handle WebSocket message with type ping
-create function "ws /on/type=ping"(body jsonb, session jsonb) returns jsonb as $$
+create function "ws /message?type=ping"(body jsonb, session jsonb) returns jsonb as $$
   return jsonb_build_object('type', 'pong');
 $$ language sql;
 ```
+
 ## Listen and notify
 
 You can use the PostgreSQL `listen` and `notify` commands to send messages from
@@ -229,7 +233,7 @@ the database to the WebSocket clients. To use this feature, you need to do the f
 
 ```sql
 -- handle WebSocket connection
-create function "ws /on/connected"(headers text[][], out session jsonb, out response jsonb) as $$
+create function "ws /connected"(headers text[][], out session jsonb, out response jsonb) as $$
   session := jsonb_build_object('user_id', null);
   response := jsonb_build_object('type', 'welcome');
   listen '/on/connected'; -- subscribe to the /on/connected channel
@@ -282,4 +286,3 @@ create function "get /user/:id"(id integer) returns public.users as $$
   select * from public.users where user_id = id; -- need to use public.users here
 $$ language sql;
 ```
-

@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use serde::Deserialize;
 use tokio_postgres::Client;
 
@@ -53,6 +53,32 @@ impl PgFunc {
         }
         Ok(funcs)
     }
+    pub fn parse_name(name: &str) -> Result<(&str, Vec<&str>, Vec<&str>)> {
+        if let Some((method, url)) = name.split_once(' ') {
+            let method = method.trim();
+            println!("method: {}, url: {}", method, url);
+            match url.trim().split('?').collect::<Vec<_>>().as_slice() {
+                [path, query] => {
+                    println!("path: {}, query: {}", path, query);
+                    let query = query.split('&').collect::<Vec<_>>();
+                    let path = Self::parse_path(path);
+                    return Ok((method, path, query));
+                }
+                [path] => {
+                    let path = Self::parse_path(path);
+                    return Ok((method, path, vec![]));
+                }
+                _ => return Err(anyhow!("Invalid function name: {}", name)),
+            }
+        }
+        Err(anyhow!("Invalid function name: {}", name))
+    }
+    fn parse_path(path: &str) -> Vec<&str> {
+        path.trim_matches(' ')
+            .trim_matches('/')
+            .split('/')
+            .collect::<Vec<_>>()
+    }
 }
 
 #[tokio::test]
@@ -62,7 +88,14 @@ async fn test_from_db() -> Result<()> {
     crate::db_client::reload(&mut client, sql).await?;
 
     let functions = PgFunc::from_db(&mut client).await?;
-    dbg!(&functions);
+    assert_eq!(functions.len(), 6);
 
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_parse_name() -> Result<()> {
+    let result = PgFunc::parse_name("GET /user/:id?name&age")?;
+    assert_eq!(result, ("GET", vec!["user", ":id"], vec!["name", "age"]));
     Ok(())
 }
